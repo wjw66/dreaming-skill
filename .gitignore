@@ -1,0 +1,5 @@
+__pycache__/
+*.pyc
+.idea/
+.dreaming/
+.ruff_cache/

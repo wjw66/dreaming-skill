@@ -1,0 +1,27 @@
+{
+  "session_id": "synthetic-atlas-design",
+  "waves": [
+    {
+      "name": "initial",
+      "events": [
+        {"type":"message","role":"user","id":"u1","timestamp":"2026-11-20T09:00:00+08:00","text":"For Atlas 1.8 PRE, keep CSV export for our billing sheet. This is an Atlas compatibility rule, not my preference for all projects. We have not deployed the new export yet."},
+        {"type":"tool_call","call_id":"check-1","id":"c1","name":"local_test","timestamp":"2026-11-20T09:01:00+08:00","input":{"project":"Atlas","version":"1.8","environment":"PRE"}},
+        {"type":"tool_result","call_id":"check-1","id":"r1","timestamp":"2026-11-20T09:01:10+08:00","output":"Three local CSV compatibility tests passed. No deployment was performed."},
+        {"type":"message","role":"assistant","id":"proposal","timestamp":"2026-11-20T09:02:00+08:00","text":"Q19: Shall the Dreaming wiki use a semantic directory with personal, projects, and practices? This is a proposal awaiting your answer. I suspect CSV might also suit Atlas production, but that is unverified."}
+      ]
+    },
+    {
+      "name": "approval-and-correction",
+      "events": [
+        {"type":"message","role":"user","id":"u2","timestamp":"2026-11-24T10:00:00+08:00","text":"Q19: agreed. Atlas 2.0 production must use JSON, while Atlas 1.8 PRE still needs CSV. These are project and version rules, not a global preference. Local tests do not prove deployment. Beacon, a separate project, needs Markdown export."}
+      ]
+    },
+    {
+      "name": "history-and-unresolved-evidence",
+      "events": [
+        {"type":"message","role":"user","id":"historical","timestamp":"2025-06-01T12:00:00+08:00","text":"In this June 2025 discussion Atlas production uses XML export. This is the historical configuration for that period."},
+        {"type":"message","role":"user","id":"u3","timestamp":"2026-11-25T11:00:00+08:00","text":"To restate the compatibility requirement: CSV remains required for Atlas 1.8 PRE. For Atlas 2.0 production I now have two configuration snapshots with the same effective timestamp: one says JSON and the other YAML. I cannot tell which snapshot is authoritative; keep that configuration question unresolved. This does not change my requested JSON policy. Deployment status remains unverified."}
+      ]
+    }
+  ]
+}

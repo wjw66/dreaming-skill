@@ -1,0 +1,8 @@
+{"type": "session_meta", "payload": {"id": "synthetic-interrupted-check"}}
+{"type": "turn_context", "payload": {"turn_id": "turn-a"}}
+{"type": "response_item", "payload": {"type": "message", "id": "u1", "role": "user", "content": [{"type": "input_text", "text": "For Atlas PRE, keep CSV export. Please check local tests; do not deploy anything."}]}}
+{"type": "response_item", "payload": {"type": "function_call", "id": "call-item", "call_id": "cancelled-test", "name": "local_test", "arguments": "{\"project\":\"Atlas\",\"environment\":\"PRE\"}"}}
+{"type": "event_msg", "payload": {"type": "turn_aborted", "turn_id": "turn-a", "reason": "The user cancelled before a tool result arrived."}}
+{"type": "turn_context", "payload": {"turn_id": "turn-b"}}
+{"type": "response_item", "payload": {"type": "message", "id": "u2", "role": "user", "content": [{"type": "input_text", "text": "The check was interrupted and no test result is available. This screenshot contains a production setting."}, {"type": "input_image", "image_url": "data:image/png;base64,UNREADABLE_SYNTHETIC_MEDIA"}]}}
+{"type": "response_item", "payload": {"type": "message", "id": "u3", "role": "user", "content": [{"type": "input_text", "text": "Do not infer the production format from the unread screenshot. Keep production unknown; PRE CSV is the only confirmed format rule."}]}}

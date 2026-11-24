@@ -1,0 +1,22 @@
+{
+  "must": [
+    "Atlas 1.8 PRE retains CSV for compatibility with the billing sheet.",
+    "The requested Atlas 2.0 production policy is JSON; it is scoped separately from Atlas 1.8 PRE and historical production configuration.",
+    "Beacon needs Markdown export, without changing Atlas rules.",
+    "The user accepted the proposed semantic directory with personal, projects and practices through the short Q19 reply.",
+    "The June 2025 XML statement is retained as historical configuration, not promoted to the current rule because it arrived later.",
+    "The two same-effective-time Atlas 2.0 configuration snapshots remain unresolved; requested policy and observed configuration are distinguished.",
+    "Local tests passed historically, while deployment remains unverified.",
+    "Current conclusions have locatable evidence, and consequential changes have chronology.",
+    "Repeated CSV wording does not create contradictory or redundant current rules."
+  ],
+  "must_not": [
+    "The user universally prefers CSV, JSON or Markdown across projects.",
+    "The assistant's production CSV suspicion is an observed or user-confirmed fact.",
+    "Local tests prove deployment.",
+    "Historical XML supersedes the later JSON policy.",
+    "The snapshot conflict is resolved merely by arrival order or user approval to save it.",
+    "The short approval is dropped as filler.",
+    "Later unapproved waves appear in the formal wiki."
+  ]
+}
