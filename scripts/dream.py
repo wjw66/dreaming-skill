@@ -16,7 +16,7 @@ import uuid
 from urllib.parse import unquote, urlsplit
 
 from dream_inputs import read_group, tool_boundary
-from dream_review import apply_edits, basis_for_run, evidence_manifest, validate_knowledge
+from dream_review import ACTIONS, STATUSES, apply_edits, basis_for_run, evidence_manifest, validate_knowledge
 
 
 class DreamError(Exception):
@@ -112,10 +112,24 @@ def manifest(content):
     return {name: digest(data) for name, data in sorted(content.items())}
 
 
+def prose_without_fences(text):
+    result, fence = [], None
+    for line in text.splitlines():
+        if fence:
+            if re.fullmatch(r" {0,3}" + re.escape(fence[0]) + "{" + str(fence[1]) + r",}[ \t]*", line):
+                fence = None
+            continue
+        opening = re.match(r" {0,3}(`{3,}|~{3,})", line)
+        if opening:
+            fence = (opening[1][0], len(opening[1]))
+        else:
+            result.append(line)
+    return "\n".join(result)
+
+
 def check_links(content):
     for name, data in content.items():
-        text = data.decode("utf-8")
-        text = re.sub(r"```.*?```", "", text, flags=re.S)
+        text = prose_without_fences(data.decode("utf-8"))
         for match in re.finditer(r"\[[^\]]*\]\((?:<([^>]+)>|([^\s)]+))(?:[ \t]+[^)]*)?\)", text):
             target = match.group(1) or match.group(2)
             parsed = urlsplit(target)
@@ -123,7 +137,7 @@ def check_links(content):
                 continue
             target_path = Path(os.path.normpath(str(Path(name).parent / unquote(parsed.path))))
             if target_path.is_absolute() or ".." in target_path.parts:
-                raise DreamError(f"Link escapes wiki in {name}: {target}")
+                raise DreamError(f"Link escapes wiki in {name}: {target}. Put quoted source Markdown in fenced text blocks; do not rewrite the quotation")
             if target_path.as_posix() not in content:
                 raise DreamError(f"Broken link in {name}: {target}")
         if re.search(r"\[\[[^\]]+\]\]", text):
@@ -449,8 +463,11 @@ def scan(args):
         formal = pages(wiki)
         effective = dict(formal)
         parent_directory = None
+        inherited_review = {}
         if state["pending"]:
             _, parent_directory, parent_seal = pending(wiki, state["pending"]["revision"])
+            if not args.reselect_pending:
+                inherited_review = parent_seal["review"]
             parent_pages = pages(parent_directory / "draft")
             for name, data in parent_pages.items() if not args.reselect_pending else ():
                 if digest(data) != parent_seal["base_wiki"].get(name):
@@ -470,8 +487,19 @@ def scan(args):
         atomic(directory / "scan.json", encoded(record))
         basis_parent = parent_directory or (run_path(wiki, state["analysis_run"]) if state.get("analysis_run") else None)
         atomic(directory / "basis.json", encoded(basis_for_run(directory, basis_parent)))
-        return {"run": run, "directory": str(directory), "new_inputs": len(items), "failures": failures, "deferred": deferred, "omissions": omissions,
-                "pending_inherited": bool(state["pending"]) and not args.reselect_pending, "evidence_inherited": bool(basis_parent), "next": "Analyze inputs, edit draft only, write review.json, then stage"}
+        # 模板只提示真实字段和来源，不预先宣称输入已分析或整理完成。
+        atomic(directory / "review.json", encoded({"summary": "", "processed": [], "failures": [],
+               "input_decisions": [{"source_id": item["source_id"], "reason": ""} for item in items],
+               "facts": inherited_review.get("facts", []), "groups": inherited_review.get("groups", []),
+               "organized": False, "consistency_checks": []}))
+        return {"run": run, "directory": str(directory), "draft": str(draft), "new_inputs": len(items), "failures": failures, "deferred": deferred, "omissions": omissions,
+                "pending_inherited": bool(state["pending"]) and not args.reselect_pending, "evidence_inherited": bool(basis_parent),
+                "review": str(directory / "review.json"),
+                "fact_fields": ["id", "statement", "subject", "facet", "scope", "status", "action", "reason", "evidence", "targets"],
+                "citation_fields": ["source_id", "ref", "quote", "page"], "status_values": sorted(STATUSES), "action_values": sorted(ACTIONS),
+                "group_fields": ["id", "kind", "summary", "paths", "fact_ids", "depends_on", "reason"], "group_kinds": ["knowledge", "structure"],
+                "consistency_check_fields": ["path", "outcome", "reason"], "consistency_outcomes": ["updated", "unchanged"],
+                "next": "Fill the incomplete review.json scaffold after reading inputs; identify source subjects in input_decisions, edit draft only, organize, then stage and status --run " + run}
 
 
 def run_path(wiki, run):
@@ -484,6 +512,8 @@ def validate_review(review, scan_record, formal, proposed):
     expected = {item["source_id"] for item in scan_record["sources"]}
     processed = review.get("processed", [])
     failures = review.get("failures", [])
+    if not isinstance(processed, list) or any(not isinstance(source, str) for source in processed):
+        raise DreamError("Review processed must be a list of source_id strings, not source objects; move failed inputs to failures")
     failed = [failure["source_id"] for failure in failures]
     if len(set(processed + failed)) != len(processed + failed) or set(processed + failed) != expected:
         raise DreamError("Every scan source must be accounted for exactly once as processed or failed")
@@ -515,6 +545,24 @@ def validate_review(review, scan_record, formal, proposed):
     return changed
 
 
+def proposal_diff(formal, proposed):
+    differences = []
+    for name in sorted(proposed):
+        if proposed[name] != formal.get(name):
+            differences.extend(difflib.unified_diff(formal.get(name, b"").decode().splitlines(True), proposed[name].decode().splitlines(True), fromfile="formal/" + name, tofile="proposed/" + name))
+    return "".join(differences).encode()
+
+
+def review_document(record, review, revision):
+    summary = ["# Pending Dream Review", "", review.get("summary", ""), "", f"Revision: `{revision}`", "",
+               f"Inputs processed: {len(review['processed'])}; analysis failures: {len(review['failures'])}; discovery/read failures: {len(record['failures'])}; deferred inputs: {len(record['deferred'])}.", ""]
+    summary += [f"- {group['id']}: {group['summary']} ({', '.join(group['paths'])})" for group in review["groups"]]
+    if record.get("omissions"):
+        summary += ["", "Non-text content was omitted: " + json.dumps(record["omissions"], ensure_ascii=False)]
+    summary += ["", "See review.json for evidence and caveats, and changes.diff for the complete changes.", "", "No formal wiki page has been changed.", ""]
+    return "\n".join(summary).encode()
+
+
 def stage(args):
     wiki = wiki_argument(args)
     with locked(wiki):
@@ -525,7 +573,7 @@ def stage(args):
             raise DreamError("State changed since scan; scan again and inherit the latest pending draft")
         formal, proposed = pages(wiki), pages(directory / "draft")
         if manifest(formal) != record["base_wiki"]:
-            raise DreamError("Formal wiki changed since scan; regenerate the proposal against current pages")
+            raise DreamError(f"Formal wiki changed since scan. Draft pages belong only in {directory / 'draft'}. Stop if you wrote formal pages without approval; preserve the files and report the mistake, do not rescan to adopt them as an approved base. Reconcile genuine external edits before preparing a new proposal")
         review = load(directory / "review.json")
         changed = validate_review(review, record, formal, proposed)
         validate_knowledge(directory, review, record, proposed, digest)
@@ -534,20 +582,11 @@ def stage(args):
         for source in record["sources"]:
             if source["source_id"] in review["processed"]:
                 cursors[source["source_id"]] = source["next_cursor"]
-        seal = {"run": args.run, "review": review, "base_wiki": record["base_wiki"], "draft": manifest(proposed), "basis": digest((directory / "basis.json").read_bytes()), "snapshots": evidence_manifest(directory, review)}
+        seal = {"run": args.run, "review": review, "base_wiki": record["base_wiki"], "draft": manifest(proposed), "basis": digest((directory / "basis.json").read_bytes()), "snapshots": evidence_manifest(directory, review), "scan": digest((directory / "scan.json").read_bytes())}
         revision = digest(encoded(seal))
         atomic(directory / "sealed.json", encoded({**seal, "revision": revision}))
-        differences = []
-        for name in sorted(changed):
-            differences.extend(difflib.unified_diff(formal.get(name, b"").decode().splitlines(True), proposed[name].decode().splitlines(True), fromfile="formal/" + name, tofile="proposed/" + name))
-        atomic(directory / "changes.diff", "".join(differences).encode())
-        summary = ["# Pending Dream Review", "", review.get("summary", ""), "", f"Revision: `{revision}`", "",
-                   f"Inputs processed: {len(review['processed'])}; analysis failures: {len(review['failures'])}; discovery/read failures: {len(record['failures'])}; deferred inputs: {len(record['deferred'])}.", ""]
-        summary += [f"- {group['id']}: {group['summary']} ({', '.join(group['paths'])})" for group in review["groups"]]
-        if record.get("omissions"):
-            summary += ["", "Non-text content was omitted: " + json.dumps(record["omissions"], ensure_ascii=False)]
-        summary += ["", "See review.json for evidence and caveats, and changes.diff for the complete changes.", "", "No formal wiki page has been changed.", ""]
-        atomic(directory / "review.md", "\n".join(summary).encode())
+        atomic(directory / "changes.diff", proposal_diff(formal, proposed))
+        atomic(directory / "review.md", review_document(record, review, revision))
         if state.get("version") == 1 and not (wiki / ".dreaming/state-v1-backup.json").exists():
             atomic(wiki / ".dreaming/state-v1-backup.json", encoded(state))
         state.update(version=2, analysis_run=args.run, cursors=cursors, pending={"run": args.run, "revision": revision} if changed else None)
@@ -555,24 +594,59 @@ def stage(args):
         return {"revision": revision, "changed_pages": len(changed), "pending": state["pending"], "review": str(directory / "review.md")}
 
 
-def pending(wiki, revision):
-    state = load(state_path(wiki))
-    proposal = state.get("pending")
-    if not proposal or proposal["revision"] != revision:
-        raise DreamError("Approval must name the current pending revision")
-    directory = run_path(wiki, proposal["run"])
+def checked_proposal(wiki, run, revision):
+    directory = run_path(wiki, run)
     sealed = load(directory / "sealed.json")
     check = {k: v for k, v in sealed.items() if k != "revision"}
-    if digest(encoded(check)) != revision or manifest(pages(directory / "draft")) != sealed["draft"]:
+    if sealed["run"] != run or sealed["revision"] != revision or digest(encoded(check)) != revision or manifest(pages(directory / "draft")) != sealed["draft"]:
         raise DreamError("The reviewed proposal was modified; regenerate review and obtain fresh approval")
     if "basis" in sealed and digest((directory / "basis.json").read_bytes()) != sealed["basis"]:
         raise DreamError("The reviewed evidence basis was modified; obtain a fresh review")
+    if "scan" in sealed and digest((directory / "scan.json").read_bytes()) != sealed["scan"]:
+        raise DreamError("The reviewed scan record was modified; obtain a fresh review")
     for relative, expected in sealed.get("snapshots", {}).items():
         if digest((directory.parent / relative).read_bytes()) != expected:
             raise DreamError("A reviewed evidence snapshot was modified; obtain a fresh review")
     if load(directory / "review.json") != sealed["review"]:
         raise DreamError("The review was modified after staging")
+    return directory, sealed
+
+
+def pending(wiki, revision):
+    state = load(state_path(wiki))
+    proposal = state.get("pending")
+    if not proposal or proposal["revision"] != revision:
+        raise DreamError("Approval must name the current pending revision")
+    directory, sealed = checked_proposal(wiki, proposal["run"], revision)
     return state, directory, sealed
+
+
+def verify_delivery(wiki, state, run):
+    if state.get("analysis_run") != run:
+        raise DreamError("Only the latest successfully staged run can be reported as completed")
+    directory = run_path(wiki, run)
+    sealed = load(directory / "sealed.json")
+    directory, sealed = checked_proposal(wiki, run, sealed["revision"])
+    record = load(directory / "scan.json")
+    formal, proposed = pages(wiki), pages(directory / "draft")
+    if record["run"] != run or record["base_wiki"] != sealed["base_wiki"] or manifest(formal) != sealed["base_wiki"]:
+        raise DreamError("Formal wiki no longer matches the reviewed base; prepare a fresh revision before reporting a pending proposal")
+    changed = validate_review(sealed["review"], record, formal, proposed)
+    expected_pending = {"run": run, "revision": sealed["revision"]} if changed else None
+    if state.get("pending") != expected_pending:
+        raise DreamError("The staged proposal does not match the current pending state")
+    for source in record["sources"]:
+        if source["source_id"] in sealed["review"]["processed"] and state["cursors"].get(source["source_id"]) != source["next_cursor"]:
+            raise DreamError("The analysis checkpoint does not match the staged run")
+    if any(state["cursors"].get(source) != cursor for source, cursor in record["empty_advances"].items()):
+        raise DreamError("The empty-input checkpoint does not match the staged run")
+    if (directory / "changes.diff").read_bytes() != proposal_diff(formal, proposed) or (directory / "review.md").read_bytes() != review_document(record, sealed["review"], sealed["revision"]):
+        raise DreamError("Readable review or diff does not match the sealed proposal; regenerate the review")
+    return {"status": "pending_review" if changed else "no_changes", "run": run, "revision": sealed["revision"],
+            "draft": str(directory / "draft"), "review": str(directory / "review.md"), "diff": str(directory / "changes.diff"),
+            "processed_inputs": len(sealed["review"]["processed"]), "analysis_failures": len(sealed["review"]["failures"]),
+            "changed_pages": len(changed), "formal_base_matches": True,
+            "semantic_truth_verified": False, "human_approval_verified": False}
 
 
 def restore(wiki, transaction):
@@ -604,6 +678,7 @@ def apply(args):
         formal, proposed = pages(wiki), pages(directory / "draft")
         if manifest(formal) != sealed["base_wiki"]:
             raise DreamError("Formal wiki changed after review; do not overwrite it")
+        verify_delivery(wiki, state, sealed["run"])
         groups = {g["id"]: g for g in sealed["review"]["groups"]}
         selected = set(groups) if args.groups == "all" else set(args.groups.split(","))
         if not selected or not selected.issubset(groups):
@@ -662,8 +737,13 @@ def recover(args):
 def status(args):
     wiki = wiki_argument(args)
     state = load(state_path(wiki))
-    return {"wiki": str(wiki), "config": state["config"], "tracked_sources": len(state["cursors"]),
-            "pending": state["pending"], "recovery_required": (wiki / ".dreaming/transaction.json").exists()}
+    result = {"wiki": str(wiki), "config": state["config"], "tracked_sources": len(state["cursors"]),
+              "pending": state["pending"], "recovery_required": (wiki / ".dreaming/transaction.json").exists()}
+    if args.run:
+        if result["recovery_required"]:
+            raise DreamError("Recover the interrupted merge before verifying a delivery")
+        result["verification"] = verify_delivery(wiki, state, args.run)
+    return result
 
 
 def configure(args):
@@ -702,8 +782,8 @@ def parser():
             command.add_argument("--reselect-pending", action="store_true", help="Start a user-requested reselection from formal pages; retain prior evidence and sealed drafts")
         if name == "patch":
             command.add_argument("--edits", required=True)
-        if name in ("stage", "patch"):
-            command.add_argument("--run", required=True)
+        if name in ("stage", "patch", "status"):
+            command.add_argument("--run", required=name != "status")
         if name in ("apply", "reject"):
             command.add_argument("--revision", required=True)
         if name == "apply":
@@ -718,7 +798,10 @@ def main():
     try:
         print(json.dumps(args.handler(args), ensure_ascii=False, indent=2))
     except (DreamError, OSError, ValueError, KeyError, TypeError) as exc:
-        print(json.dumps({"error": str(exc)}), file=sys.stderr)
+        result = {"error": str(exc)}
+        if args.command in ("stage", "patch"):
+            result["reference"] = str(Path(__file__).resolve().parents[1] / "references/cli.md")
+        print(json.dumps(result), file=sys.stderr)
         return 1
     return 0
 

@@ -68,11 +68,12 @@ class DreamTests(unittest.TestCase):
     def account_review(self, review, directory):
         basis = dream.load(directory / "basis.json")
         entry = next((e for e in basis.values() if not e.get("context_only")), None)
+        original = next((e for e in dream.load(directory.parent / entry["origin_run"] / "inputs" / (entry["source_id"] + ".json"))["events"] if e["ref"] == entry["ref"]), None) if entry else None
         review["input_decisions"] = [{"source_id": source, "reason": "Analyzed the scoped Atlas requirement."} for source in review["processed"]]
         for group in review["groups"]:
             group.setdefault("kind", "knowledge")
             group.setdefault("fact_ids", ["atlas-rule"])
-        review["facts"] = [{"id": "atlas-rule", "statement": "For Atlas only, keep CSV.", "subject": "Atlas", "facet": "export", "scope": "Atlas only", "status": "explicit", "action": "add", "reason": "Explicit user requirement", "evidence": [{"source_id": entry["source_id"], "ref": entry["ref"]}], "targets": ["semantic/projects/atlas.md"]}] if review["groups"] else []
+        review["facts"] = [{"id": "atlas-rule", "statement": "For Atlas only, keep CSV.", "subject": "Atlas", "facet": "export", "scope": "Atlas only", "status": "explicit", "action": "add", "reason": "Explicit user requirement", "evidence": [{"source_id": entry["source_id"], "ref": entry["ref"], "quote": original["text"], "page": "evidence/atlas.md"}], "targets": ["semantic/projects/atlas.md"]}] if review["groups"] else []
         formal = dream.pages(self.wiki)
         review["consistency_checks"] = [{"path": name, "outcome": "updated" if data != formal.get(name) else "unchanged", "reason": "Checked the scoped rule and navigation."} for name, data in dream.pages(directory / "draft").items()]
 

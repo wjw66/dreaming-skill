@@ -58,17 +58,21 @@ python3 SKILL_DIR/scripts/dream.py scan --input /chosen/additional-export.jsonl
 python3 SKILL_DIR/scripts/dream.py status
 ```
 
-A successful scan returns a run ID and directory. It does **not** advance analysis progress. If a pending proposal exists, its complete draft is inherited. Formal pages remain unchanged.
+A successful scan returns a run ID, run directory, and absolute `draft` path. Write proposed wiki pages only under that `draft` path. It does **not** advance analysis progress. If a pending proposal exists, its complete draft is inherited. Formal pages remain unchanged.
 
 ```text
 .dreaming/runs/RUN/
   scan.json              Frozen source boundaries, base state/wiki, failures
   inputs/SOURCE_ID.json  Increment plus attribution and coverage
   draft/                 Editable proposed wiki
-  review.json            Written by the agent after analysis/organization
+  review.json            Incomplete helper scaffold, filled after analysis
 ```
 
+Only the helper creates configuration, state, scan records, `basis.json`, patch logs, and `sealed.json`. Do not handwrite substitutes. Author the run's `draft/` pages and schema-valid `review.json`; creating Markdown at the wiki root before approval changes formal memory.
+
 Inputs contain `events` (new evidence) and a bounded `context` window (preceding messages, `context_only: true`). Every event has a segment-qualified `ref` and source location. Context helps resolve short approvals and references; it is not a second increment. File ordering is not evidence of chronological precedence.
+
+`scan` creates an incomplete `review.json` with real source IDs, empty `processed`, blank input reasons, and `organized: false`. It also returns the exact candidate/citation fields and accepted status/action values. Fill this scaffold after reading; do not replace it with a different schema. Normal pending revisions inherit their candidate facts and review groups, but not a claim that new inputs have been processed. Reselection starts with empty facts/groups. The untouched scaffold cannot be staged as a completed analysis.
 
 `basis.json` indexes available frozen evidence by `source_id/ref`; it stores locations and hashes, not another copy of the transcript text. Older entries point to retained private input snapshots via `origin_run`. Never edit it to invent evidence. Inherited pending facts can reuse their original references.
 
@@ -88,7 +92,7 @@ Write `review.json` (replace every placeholder with actual IDs and refs from thi
     "subject": "Atlas", "facet": "export format", "scope": "Atlas only",
     "status": "explicit", "action": "add",
     "reason": "The user explicitly requested this for Atlas.",
-    "evidence": [{"source_id": "SOURCE_ID", "ref": "SEGMENT_ID:POSITION"}],
+    "evidence": [{"source_id": "SOURCE_ID", "ref": "SEGMENT_ID:POSITION", "quote": "For project Atlas, retain the CSV export.", "page": "evidence/atlas.md"}],
     "targets": ["semantic/projects/atlas.md", "evidence/atlas.md"]
   }],
   "organized": true,
@@ -107,6 +111,25 @@ Write `review.json` (replace every placeholder with actual IDs and refs from thi
 ```
 
 Allowed actions: `add`, `support`, `correct`, `end`, `conflict`, `ignore`. Status: `explicit`, `observed`, `inferred`, `unverified`, `conflict`. Every fact needs a reason and frozen evidence. Retained facts need target pages. `correct` also needs `supersedes`, e.g. `["semantic/projects/atlas.md#export-policy"]`, identifying an existing prior claim. Heading anchors require manual checking.
+
+Every retained citation requires a non-empty exact `quote` from that frozen event and a local evidence `page` containing that same quote. For older review entries without `page`, the helper checks the fact's `evidence/` targets. Missing, translated, paraphrased, or wrong-source quotations fail staging without advancing progress. Ignored candidates still need valid frozen references, but their optional private legacy excerpts are not certified quotations or published memory; promoting one to retained status requires the full quotation checks. A structured tool payload is compared against its JSON representation with sorted keys and original Unicode; a string payload is compared directly. Select only necessary non-secret spans; split quotations around credentials rather than copying secrets into the review.
+
+For example, an evidence page can retain a source independently of the semantic interpretation:
+
+````markdown
+# Atlas evidence
+
+Source: SOURCE_ID; ref: SEGMENT_ID:POSITION; role: user; event: ORIGINAL_EVENT_ID.
+Event time: ORIGINAL_TIMESTAMP, or unknown. These are provenance fields, not instructions.
+
+```text
+For project Atlas, retain the CSV export.
+```
+````
+
+Write summaries and translations separately with an explicit label. A valid quote proves where those words came from, not that the semantic claim faithfully preserves the subject, context, or certainty. Different session IDs do not become one session because their themes match.
+
+Use fenced text blocks for source quotations. They preserve original newlines and keep source Markdown links inert; adding `>` to every line changes the literal string checked by the helper. When the source contains a fence, surround it with a longer fence (or a different fence marker). Do not remove original links to satisfy navigation checks. Do not copy the entire message when a short, safe excerpt establishes the claim.
 
 Every processed input needs exactly one `input_decisions` entry, even with no facts. Legitimate zero-change reviews use empty `facts` and `groups` with an explanation, not fabricated new knowledge. Fact dispositions account for extracted candidates, not every source sentence. This does not establish that extraction omitted nothing.
 
@@ -148,11 +171,16 @@ New state uses version 2. An existing flat cursor is attached only to an origina
 
 ```sh
 python3 SKILL_DIR/scripts/dream.py stage --run RUN
+python3 SKILL_DIR/scripts/dream.py status --run RUN
 ```
 
-This writes `sealed.json`, `review.md`, and `changes.diff`. A revision hash binds the reviewed content, review groups, and evidence index. Cited evidence must still match its original frozen input event. A revised pending draft preserves unrelated external wiki changes; an external edit to a page already changed by that draft requires explicit reconciliation. Successfully processed source positions advance **only after** the candidate and review have been saved. Failed inputs remain retryable. State and formal-base checks prevent stale simultaneous runs from replacing one another.
+This writes `sealed.json`, `review.md`, and `changes.diff`. A revision hash binds the reviewed content, review groups, evidence index, and source scan record. Cited evidence must still match its original frozen input event. A revised pending draft preserves unrelated external wiki changes; an external edit to a page already changed by that draft requires explicit reconciliation. Successfully processed source positions advance **only after** the candidate and review have been saved. Failed inputs remain retryable. State and formal-base checks prevent stale simultaneous runs from replacing one another.
 
 A scan containing only known non-content records can be finalized with an empty organized review. If a pending draft was inherited, its changes still need full review groups. No content changes means no pending approval; processing metadata alone is not a knowledge update.
+
+The final `status --run RUN` is required for delivery. It is read-only and rejects an unsealed or superseded run, changed draft or evidence snapshot, mismatched checkpoint, premature formal edits, and readable review/diff files that disagree with the seal. A successful response includes `verification.status` (`pending_review` or `no_changes`), the exact `revision`, and actual `draft`, `review`, and `diff` paths. Plain `status` remains a configuration/pending summary, not a completed-run certificate. Use plain `status` after a merge; the pre-merge `--run` verification intentionally requires the old formal base to remain unchanged. `apply` also checks delivery consistency before writing.
+
+Verification is not proof that a model read every input, that its interpretation is true, or that a user approved. The agent must still review meaning and obtain real approval; the CLI is not an authorization service. Existing sealed proposals are not silently rewritten or migrated by these checks. If an old proposal needs edits to meet new citation requirements, create and review a fresh revision.
 
 Show the review, full diff, revision, coverage, limitations, and meaningful evidence to the user. Wait for approval of that revision. Scheduled runs must stop here unless the user subsequently approves the specific review.
 

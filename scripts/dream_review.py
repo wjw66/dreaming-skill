@@ -9,6 +9,13 @@ ACTIONS = {'add', 'support', 'correct', 'end', 'conflict', 'ignore'}
 STATUSES = {'explicit', 'observed', 'inferred', 'unverified', 'conflict'}
 
 
+def evidence_text(event):
+    value = event.get('text')
+    if value is None:
+        value = event.get('output', event.get('input', event.get('reason')))
+    return value if isinstance(value, str) else json.dumps(value, ensure_ascii=False, sort_keys=True)
+
+
 def basis_for_run(directory, parent_directory=None):
     basis = {}
     if parent_directory:
@@ -92,7 +99,7 @@ def validate_knowledge(directory, review, record, proposed, hash_bytes):
         if any(not isinstance(fact.get(k), str) or not fact[k].strip() for k in ('statement', 'subject', 'facet', 'scope', 'reason')):
             raise ValueError(f'Fact {identity} requires statement, subject, facet, scope and reason')
         if fact.get('action') not in ACTIONS or fact.get('status') not in STATUSES:
-            raise ValueError(f'Invalid action or epistemic status for fact {identity}')
+            raise ValueError(f'Invalid action or epistemic status for fact {identity}; action must be one of {sorted(ACTIONS)}, status one of {sorted(STATUSES)}')
         evidence = fact.get('evidence', [])
         if not evidence:
             raise ValueError(f'Fact {identity} requires source evidence')
@@ -114,6 +121,15 @@ def validate_knowledge(directory, review, record, proposed, hash_bytes):
             original = snapshots[snapshot_key].get(entry['ref'])
             if original is None or hashlib.sha256(json.dumps(original, sort_keys=True, ensure_ascii=False).encode()).hexdigest() != entry['payload_sha256']:
                 raise ValueError('Cited evidence no longer matches its frozen source snapshot')
+            quote = citation.get('quote')
+            if fact['action'] != 'ignore':
+                if not isinstance(quote, str) or not quote.strip() or quote not in evidence_text(original):
+                    raise ValueError(f'Fact {identity} requires a non-empty verbatim quote from its cited frozen event; translations and paraphrases are not source quotations')
+                evidence_pages = [citation['page']] if citation.get('page') else [t.split('#', 1)[0] for t in fact.get('targets', []) if isinstance(t, str) and t.startswith('evidence/')]
+                if not evidence_pages or any(not isinstance(p, str) or not p.startswith('evidence/') or p not in proposed for p in evidence_pages):
+                    raise ValueError(f'Fact {identity} requires a local evidence page for each retained quotation')
+                if not any(quote in proposed[p].decode('utf-8') for p in evidence_pages):
+                    raise ValueError(f'Fact {identity} quotation is absent from its evidence page; publish the original excerpt, not only a paraphrase')
             if entry['origin_run'] == record['run'] and entry['source_id'] not in processed:
                 raise ValueError('A failed input cannot supply newly analyzed facts')
             substantive = substantive or not entry.get('context_only', False)
@@ -155,7 +171,7 @@ def validate_knowledge(directory, review, record, proposed, hash_bytes):
             raise ValueError('Consistency checks need unique existing pages and non-empty reasons')
         outcome = 'updated' if hash_bytes(proposed[name]) != record['base_wiki'].get(name) else 'unchanged'
         if check.get('outcome') != outcome:
-            raise ValueError(f'Consistency outcome does not match the actual page diff: {name}')
+            raise ValueError(f'Consistency outcome does not match the actual page diff: {name}; expected {outcome} relative to the formal base, not a previous draft')
         checked[name] = check
     required = {p for p in knowledge_paths if p.startswith(('events/', 'semantic/'))}
     if knowledge_paths:

@@ -19,7 +19,7 @@ Create categories and pages when useful, not as empty scaffolding. The three con
 
 ## What earns a place in memory?
 
-The wiki should help a future agent understand this person and make better choices with them. It is not a session digest, activity log, project inventory, or copy of the user's document library.
+The wiki should help the person revisit decisions, understand how feedback changed the collaboration, and control their own memory asset. It should also help future agents understand this person and make better choices with them. It is not a session digest, activity log, project inventory, or copy of the user's document library.
 
 Before retaining a candidate, ask:
 
@@ -37,6 +37,8 @@ Examples:
 
 Write the future use in the retained candidate's existing `reason` field. Do not assign numeric importance scores or manufacture a fact/page quota. Process every selected source; retain only what earns a place. A useful session can yield no durable memory.
 
+Long-term value is a use test, not a requirement to remain useful for a fixed number of years. A meaningful current decision can qualify; an unsupported generalization does not become valuable just because it sounds timeless.
+
 ### Evidence: what supports this?
 
 Store selected, credential-free excerpts supporting retained memories, with enough context to check important claims. Group excerpts by source conversation, using stable source IDs in filenames to avoid collisions. Do not make an evidence page for every processed session. Complete transcripts remain private source history; do not copy them or unused quotations into the published wiki.
@@ -51,6 +53,12 @@ For each excerpt record:
 - Limitations such as missing tool output, ambiguous context, or historical-only validation.
 
 An assertion in a transcript is evidence that the assertion was made, not automatically evidence that it is true. A successful local command is not evidence of deployment. User confirmation permits storage; it does not upgrade the source's factual authority.
+
+Preserve the quotation in its original language and wording. A paragraph rewritten in English from a Chinese message is a translation or summary, never a verbatim excerpt. Keep each quote adjacent to its own source/event/ref and role, rather than attaching one message's metadata to a synthesis of several conversations. Record the citation's exact `quote` and local `page` in `review.json`; staging checks that the quote exists in both places.
+
+Identify the actual tool or project before merging claims or timelines. A progress-tracking tool can deliberately use daily files while a separate memory wiki uses topics; neither design automatically supersedes the other. Keep both scoped to their subjects. Do not rename a historical tool after the skill currently processing it. Different conversations can support one conclusion, but are not physical segments of the same session. If missing context prevents identifying an approval or subject, say so and withhold the unsupported relationship.
+
+Keep reported problems separate from causal inference: “it rarely triggers” does not establish why. Likewise, asking for plain explanations while retaining depth does not establish a preference for sacrificing accuracy. Label proposed lessons and explanations as inference with scope; do not place them in the source quotation or present them as the user's own rationale.
 
 Do not rewrite an earlier excerpt to agree with a new conclusion. Add the correcting evidence and link both where the change matters. Direct source locations are provenance strings, not portable Markdown links; use code formatting for filesystem locations outside this wiki. Pages should link to local evidence pages using relative Markdown links.
 
@@ -89,6 +97,8 @@ When a conclusion is superseded, state the current understanding and briefly ide
 `index.md` starts with what is strongly related to the person: supported background and goals, ways of weighing choices, views, and collaboration feedback. Describe what each entry helps a future agent decide. Follow with useful practices and project context, then the few events worth revisiting and evidence. Do not lead with a project inventory, file counts, or a chronology. Every retained page should be discoverable through the link structure; do not make the index a second copy of the wiki.
 
 `current.md` is a small view of personally meaningful current focus, decisions still being weighed, and unresolved questions that could affect future action. Ordinary project status and old requests are not today's priorities. Link to canonical pages rather than reproducing an activity log. Remove completed tasks from this view; retain an event only when it passes the long-term value test. A rejected dream is not a completed task.
+
+On a first import of historical conversations, use an explicitly dated last-known view or say that present-day priorities are unconfirmed. An old request to implement a change proves neither that it was implemented nor that work is active today. Later runs preserve existing confirmed focus unless evidence updates it; no fixed age cutoff or repeated confirmation of unchanged memory is required.
 
 Neither file is automatically loaded into future agent sessions. Reading and context injection are outside MVP scope.
 

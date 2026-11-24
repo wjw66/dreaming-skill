@@ -2,6 +2,24 @@
 
 Script tests establish bookkeeping and edit invariants. They cannot prove that a model extracted the right facts or interpreted their scope correctly. Run this separate exercise after substantive changes to the skill.
 
+## Actual-artifact acceptance before scores
+
+Separate a skill being installed, being loaded, and completing its workflow. For the execution regression, name `$dreaming-skill` explicitly; test clear natural-language discovery separately. Preserve the explicit-only host policy. A trial that never loaded the skill diagnoses discovery, not compliance with its body.
+
+In an isolated wiki/registry, require all of the following before calling a positive trial successful:
+
+- The execution trace shows actual helper use for setup (when needed), scan, stage, and `status --run RUN`, not just files or a final response claiming those steps happened.
+- The evaluator runs `status --run RUN` itself using the helper-produced latest staged run. It must exit zero with `pending_review` or `no_changes`, a real sealed revision, source checkpoint, review, and diff. Plain `status` is not this gate.
+- Formal pages still match the captured pre-run base before any approval. No test gives the model advance permission to merge an unknown version. The helper must reject an unsealed run, modified review/diff, stale base, or mismatched checkpoint.
+- Retained citations have exact original-language quotes in both frozen events and named local evidence pages. A correct `review.json` quote with only a paraphrase on the evidence page fails.
+- Read actual semantic, event, and evidence pages against held-out source expectations: distinguish two named tools with related memory/recording goals, preserve their different organization choices, and do not turn one tool's history into the other's origin. Do not infer causes from a problem report alone. Translations and summaries are not verbatim quotes.
+- Check meaning on every page, including direction and negation, stated completion versus requests, and unrelated conversations merged into a timeline. A mechanically verified proposal can still fail semantic acceptance. Count that as a failure even if a model judge or workflow-only custom grader passes it.
+- A read-only reflection request answers with evidence while preserving the input wiki byte-for-byte and never starting consolidation. Useful human reflection and future-agent reuse are both outcomes to assess.
+
+Keep the framework's unmodified scores and this acceptance result separately. A high answer score cannot override a failed workflow or source-fidelity gate. The helper's structural verification is not a semantic evaluator: `semantic_truth_verified` and `human_approval_verified` remain false. Avoid tests that only check headings, file counts, or the agent's self-report.
+
+When using SkillEvaluator, capture produced pages in a separate filesystem observer before its sandbox cleanup; default judges may see only selected trajectory evidence. Supplement those scores with the checks above. An observer that reports “documents exist” is not a full-workflow or fact-correctness gate.
+
 Assess selection as well as recall. Give a reader realistic future choices: how to adapt an explanation for the user, which tradeoff they previously accepted, what feedback should change the next attempt, and which view remains provisional. Check that person-related entries come first, important concrete constraints survive, and routine outputs/status do not crowd them out. An exact answer about an incidental past activity is not by itself a reason to store it. Do not optimize the wiki into an exhaustive log merely to improve retrospective question scores.
 
 ## Isolated three-wave exercise

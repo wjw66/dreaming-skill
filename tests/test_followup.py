@@ -21,7 +21,10 @@ class FollowupTests(unittest.TestCase):
         scan = self.fx.call('scan')
         directory = Path(scan['directory'])
         item = dream.load(next((directory / 'inputs').glob('*.json')))
-        fact = {'id': 'new-rule', 'statement': text, 'subject': 'Atlas', 'facet': 'export', 'scope': 'Atlas only', 'status': 'explicit', 'action': 'add', 'reason': 'Explicit new user requirement.', 'evidence': [{'source_id': item['source_id'], 'ref': item['events'][0]['ref']}], 'targets': ['semantic/projects/atlas.md']}
+        evidence_page = 'evidence/atlas.md' if text == 'For Atlas only, keep CSV.' else 'evidence/new-user.md'
+        if evidence_page == 'evidence/new-user.md':
+            dream.atomic(directory / 'draft' / evidence_page, ('# New source\n\n' + text + '\n').encode())
+        fact = {'id': 'new-rule', 'statement': text, 'subject': 'Atlas', 'facet': 'export', 'scope': 'Atlas only', 'status': 'explicit', 'action': 'add', 'reason': 'Explicit new user requirement.', 'evidence': [{'source_id': item['source_id'], 'ref': item['events'][0]['ref'], 'quote': item['events'][0]['text'], 'page': evidence_page}], 'targets': ['semantic/projects/atlas.md']}
         review = {'summary': 'Analyze new requirement.', 'processed': [item['source_id']], 'failures': [], 'organized': True, 'facts': [fact], 'input_decisions': [{'source_id': item['source_id'], 'reason': 'Extracted the user requirement.'}], 'groups': [], 'consistency_checks': []}
         return scan, directory, review
 
@@ -68,8 +71,9 @@ class FollowupTests(unittest.TestCase):
 
     def test_new_fact_cannot_be_marked_added_without_a_page_change(self):
         scan, directory, review = self.existing('Preserve column order in Atlas CSV exports.')
+        review['groups'] = [{'id': 'source', 'kind': 'structure', 'reason': 'Preserve a source excerpt without claiming the rule was added.', 'summary': 'Source only', 'paths': ['evidence/new-user.md'], 'depends_on': []}]
         state = self.fx.state()
-        with self.assertRaises(ValueError):
+        with self.assertRaisesRegex(ValueError, 'material change'):
             self.stage(scan, directory, review)
         self.assertEqual(state, self.fx.state())
 
@@ -85,9 +89,9 @@ class FollowupTests(unittest.TestCase):
         scan, directory, review = self.existing('Preserve column order in Atlas CSV exports.')
         dream.atomic(directory / 'draft/semantic/projects/beacon.md', b'# Beacon\n\nUse Markdown.\n')
         review['facts'][0]['action'] = 'support'
-        review['groups'] = [{'id': 'wrong-project', 'kind': 'knowledge', 'fact_ids': ['new-rule'], 'summary': 'Change Beacon using an Atlas claim.', 'paths': ['semantic/projects/beacon.md'], 'depends_on': []}]
+        review['groups'] = [{'id': 'wrong-project', 'kind': 'knowledge', 'fact_ids': ['new-rule'], 'summary': 'Change Beacon using an Atlas claim.', 'paths': ['semantic/projects/beacon.md', 'evidence/new-user.md'], 'depends_on': []}]
         review['consistency_checks'] = [{'path': name, 'outcome': 'updated' if name == 'semantic/projects/beacon.md' else 'unchanged', 'reason': 'Checked page.'} for name in ('index.md', 'current.md', 'semantic/projects/beacon.md')]
-        with self.assertRaises(ValueError):
+        with self.assertRaisesRegex(ValueError, 'no candidate targeting'):
             self.stage(scan, directory, review)
 
     def test_malformed_native_message_does_not_abort_other_sessions(self):
@@ -118,7 +122,7 @@ class FollowupTests(unittest.TestCase):
         edits = [{'path': 'semantic/projects/atlas.md', 'old': 'Keep CSV for Atlas only.', 'new': 'Atlas must use JSON.', 'kind': 'knowledge', 'fact_ids': ['beacon']}]
         dream.atomic(directory / 'edits.json', dream.encoded(edits))
         self.fx.call('patch', '--run', scan['run'], '--edits', str(directory / 'edits.json'))
-        atlas_group = {'id': 'atlas', 'kind': 'structure' if structural_owner else 'knowledge', 'reason': 'Synthetic ownership check', 'fact_ids': ['new-rule', 'beacon'] if extra_owner_fact else ['new-rule'], 'summary': 'Atlas change', 'paths': ['semantic/projects/atlas.md'], 'depends_on': []}
+        atlas_group = {'id': 'atlas', 'kind': 'structure' if structural_owner else 'knowledge', 'reason': 'Synthetic ownership check', 'fact_ids': ['new-rule', 'beacon'] if extra_owner_fact else ['new-rule'], 'summary': 'Atlas change', 'paths': ['semantic/projects/atlas.md', 'evidence/new-user.md'], 'depends_on': []}
         review['groups'] = [atlas_group, {'id': 'beacon', 'kind': 'knowledge', 'fact_ids': ['beacon'], 'summary': 'Beacon change', 'paths': ['semantic/projects/beacon.md'], 'depends_on': []}]
         review['consistency_checks'] = [{'path': name, 'outcome': 'unchanged' if name in ('index.md', 'current.md') else 'updated', 'reason': 'Checked page.'} for name in ('index.md', 'current.md', 'semantic/projects/atlas.md', 'semantic/projects/beacon.md')]
         return scan, directory, review
